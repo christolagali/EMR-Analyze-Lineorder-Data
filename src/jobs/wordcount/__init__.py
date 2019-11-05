@@ -69,32 +69,37 @@ def analyze(sparkcontext,sparksession):
     #customer tmp table
     createTempTable(customerDF,'customer_tbl')
 
-
-
-    # analyze and export data
     """
+        Define SQL Queries that are fired against Hive Tables and export the results as csv files.
+    """
+
+    # Discount provided per city where Shipping Mode = SHIP
     query = 'SELECT a.s_city,sum(b.lo_discount) FROM supp_tbl a, line_tbl b where a.s_suppkey = b.lo_suppkey and b.lo_shipmode = "SHIP" group by a.s_city'
     exportData(query,'discount_by_city.csv',sparksession,sparkcontext)
 
-    """
 
-    """
-    # Discount by city for SHIP as shipping method
-
+    # Discount by nation for SHIP as shipping method
     query = 'SELECT a.s_nation,sum(b.lo_discount) FROM supp_tbl a, line_tbl b where a.s_suppkey = b.lo_suppkey and b.lo_shipmode = "SHIP" group by a.s_nation'
     exportData(query,'discount_by_nation.csv',sparksession,sparkcontext)
-    """
 
+    # Quantity and total Order Price aggregated by each customer 
     query = 'select b.c_custkey,SUM(a.lo_qty), SUM(a.lo_ordertotalprice) from line_tbl a, customer_tbl b where a.lo_custkey = b.c_custkey group by b.c_custkey order by b.c_custkey'
     exportData(query,'customer_qty_data.csv',sparksession,sparkcontext)
-
-
-
 
     
 	
 	
+"""
+    Transformation Methods to:
+    1. split each row (text format)
+    2. Perform data type conversion
+    3. Return a Row() object which is used to create a DataFrame
+"""
 
+"""
+    Method to Transform Customer.tbl data
+    Param: row: each text row from the RDD
+"""
 def transform_customerData(row):
     
     cust_lst = row.split('|')
@@ -108,7 +113,10 @@ def transform_customerData(row):
     return Row(c_custkey=c_custkey,c_name=c_name,c_address=c_address,c_city=c_city,c_nation=c_nation)
 
 
-
+"""
+    Method to Transform lineorder.tbl data
+    Param: row: each text row from the RDD
+"""
 def transform_linedata(row):
     
     lst_row = row.split('|')
@@ -140,7 +148,10 @@ def transform_linedata(row):
 
 
 
-
+"""
+    Method to Transform supplier.tbl data
+    Param: row: each text row from the RDD
+"""
 def transform_suppdata(row):
     
     lst_row = row.split('|')
@@ -152,24 +163,37 @@ def transform_suppdata(row):
     s_nation = lst_row[4]
     s_region = lst_row[5]
     
-    
     return Row(s_suppkey=s_suppkey,s_address=s_address,s_city=s_city,s_nation=s_nation,
               s_region=s_region)
 
 
+
+"""
+    Method that takes in the following params:
+    1. dataframe: DataFrame that will be used to call registerTempTable() method
+    2. tablename: Name of the temp table that needs to be created
+"""
 def createTempTable(dataframe,tablename):
 
+    # Using the DataFrame to create a Hive Temp Table against which SQL queries can be fired
     dataframe.registerTempTable(tablename)
 
 
+"""
+    Method that takes in the following params:
+    1. query: DataFrame that will be used to call registerTempTable() method
+    2. filename: Name of the temp table that needs to be created
+    3. sparksession: Spark Session that is defined in the main program
+    4. sparkcontext: Spark Context that is defined in the main program
+"""
 def exportData(query,filename,sparksession,sparkcontext):
 
     # Discount by city for SHIP as shipping method
     querydf = sparksession.sql(query).collect()
 
-    
-    #resultDF = sparksession.createDataFrame(citydf)
     resultDF = sparksession.createDataFrame(sparkcontext.parallelize(querydf))
+
+    # We leverge the toPandas() method to convert the Spark DataFrame into Pandas DataFrame and save it.
     resultDF.toPandas().to_csv(filename)
 
 
