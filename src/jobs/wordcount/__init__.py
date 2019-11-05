@@ -47,14 +47,51 @@ def analyze(sparkcontext,sparksession):
 
     # Convert Supplier list to Data Frame
     supp_df = sparksession.createDataFrame(suppdata)
+
     # create a Data Frame
     customerDF = sparksession.createDataFrame(customer_transformed_RDD)
 
     # saving the data to csv
     #customerDF.toPandas().to_csv('customer_qty_data.csv')
-    supp_df.toPandas().to_csv('supplier_data.csv')
-	
-	
+    #supp_df.toPandas().to_csv('supplier_data.csv')
+
+    """
+        Registering temp tables for each dataset.
+        SQL Queries will be fored against these temp tables
+    """
+
+    # lineorder tmp table
+    createTempTable(line_df,'line_tbl')
+
+    # Supplier tmp table
+    createTempTable(supp_df,'supp_tbl')
+
+    #customer tmp table
+    createTempTable(customerDF,'customer_tbl')
+
+
+
+    # analyze and export data
+    """
+    query = 'SELECT a.s_city,sum(b.lo_discount) FROM supp_tbl a, line_tbl b where a.s_suppkey = b.lo_suppkey and b.lo_shipmode = "SHIP" group by a.s_city'
+    exportData(query,'discount_by_city.csv',sparksession,sparkcontext)
+
+    """
+
+    """
+    # Discount by city for SHIP as shipping method
+
+    query = 'SELECT a.s_nation,sum(b.lo_discount) FROM supp_tbl a, line_tbl b where a.s_suppkey = b.lo_suppkey and b.lo_shipmode = "SHIP" group by a.s_nation'
+    exportData(query,'discount_by_nation.csv',sparksession,sparkcontext)
+    """
+
+    query = 'select b.c_custkey,SUM(a.lo_qty), SUM(a.lo_ordertotalprice) from line_tbl a, customer_tbl b where a.lo_custkey = b.c_custkey group by b.c_custkey order by b.c_custkey'
+    exportData(query,'customer_qty_data.csv',sparksession,sparkcontext)
+
+
+
+
+    
 	
 	
 
@@ -118,3 +155,22 @@ def transform_suppdata(row):
     
     return Row(s_suppkey=s_suppkey,s_address=s_address,s_city=s_city,s_nation=s_nation,
               s_region=s_region)
+
+
+def createTempTable(dataframe,tablename):
+
+    dataframe.registerTempTable(tablename)
+
+
+def exportData(query,filename,sparksession,sparkcontext):
+
+    # Discount by city for SHIP as shipping method
+    querydf = sparksession.sql(query).collect()
+
+    
+    #resultDF = sparksession.createDataFrame(citydf)
+    resultDF = sparksession.createDataFrame(sparkcontext.parallelize(querydf))
+    resultDF.toPandas().to_csv(filename)
+
+
+
